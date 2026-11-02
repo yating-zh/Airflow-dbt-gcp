@@ -35,6 +35,7 @@ possible_paths = [
 keyfile_path = next((path for path in possible_paths if path and os.path.exists(path)), possible_paths[-1])
 print(f"Using GCS credentials from: {keyfile_path}")
 storage_client = storage.Client.from_service_account_json(keyfile_path)
+# storage.Client.from_service_account_json()用来创建一个GCS object，使用指定的service account JSON key来进行身份验证。这个对象可以用来访问和操作GCS中的bucket和文件。
 
 # Test the connection by listing accessible buckets in GCS.
 buckets = list(storage_client.list_buckets())
@@ -50,10 +51,14 @@ fake = Faker()
 # =========================
 # Bucket name where raw data will be stored.
 BUCKET_NAME = 'healthcare-data-2026-i'
+#cloud storage是一个云端存储服务，类似于一个在线硬盘，可以用来存放和管理数据。
+#而bucket相当于一个文件夹，里面可以存放很多文件。这个bucket是用来存放raw data的。
+#而blob相当于是bucket里面的一个文件，可以是文本、图片、视频等各种类型的数据。
 
 # Prefix/folder names in the bucket for development and production data.
 DEV_PATH = 'dev/'
 PROD_PATH = 'prod/'
+#healthcare-data-2026-i下dev和prod是两个文件夹，分别存放dev和prod环境的raw data。
 
 # Number of synthetic records to generate for each environment.
 DEV_RECORDS = 5000
@@ -68,9 +73,10 @@ end_date = datetime.today()
 # 4) Cloud Storage helper functions
 # =========================
 # Create the bucket if it does not already exist.
+# create_bucket是自己写的函数，用来创建一个bucket，如果这个bucket已经存在，就不创建了。
 def create_bucket():
     try:
-        bucket = storage_client.bucket(BUCKET_NAME)
+        bucket = storage_client.bucket(BUCKET_NAME) #用storage_client.bucket()方法来获取一个bucket对象，参数是bucket的名字。
         if not bucket.exists():
             storage_client.create_bucket(BUCKET_NAME)
             print(f"Bucket '{BUCKET_NAME}' created successfully.")
@@ -81,7 +87,8 @@ def create_bucket():
 
 
 # Delete any existing files under a specific GCS folder prefix.
-def empty_gcs_folder(path):
+#每次生成新的raw data之前，先清空GCS中对应的文件夹，以避免旧数据干扰。
+def empty_gcs_folder(path): 
     print(f"Emptying folder '{path}' in GCS bucket '{BUCKET_NAME}'...")
     bucket = storage_client.bucket(BUCKET_NAME)
     blobs = bucket.list_blobs(prefix=path)
@@ -98,7 +105,10 @@ def empty_gcs_folder(path):
 def upload_to_gcs(data, path, filename, file_format):
     print(f"Uploading {filename} in {file_format} format to GCS...")
     bucket = storage_client.bucket(BUCKET_NAME)
-    blob = bucket.blob(path + filename)
+    blob = bucket.blob(path + filename) 
+    #blob是GCS中的一个对象，可以是文件或其他数据。这里用bucket.blob()方法来创建一个blob对象，参数是文件的路径和名字。
+    #blob和bucket的关系就像文件和文件夹的关系，blob是bucket中的一个文件。
+    #blob = Binary Large Object，意思是二进制大对象，可以用来存储各种类型的数据，包括文本、图片、音频、视频等。
 
     # Upload CSV data as text.
     if file_format == 'csv':
@@ -111,6 +121,7 @@ def upload_to_gcs(data, path, filename, file_format):
         blob.upload_from_string(json_data, content_type='application/json')
 
     # Upload Parquet data using PyArrow.
+    #parquet是一种列式存储格式，适合大数据处理和分析。PyArrow是一个Python库，用来读写Parquet文件。
     elif file_format == 'parquet':
         buffer = io.BytesIO()
         pq.write_table(data, buffer)
@@ -118,7 +129,6 @@ def upload_to_gcs(data, path, filename, file_format):
         blob.upload_from_file(buffer, content_type='application/octet-stream')
 
     print(f"Uploaded {filename} to {path}")
-
 
 # =========================
 # 6) Data generation functions
@@ -226,7 +236,8 @@ def generate_claims(num_records, patient_ids):
 
     table = pa.Table.from_pandas(pd.DataFrame(claims), schema=schema)
     return table
-
+#为什么这里有data frame，jason 还有parquet三种格式呢？因为不同的下游系统可能需要不同的数据格式。比如，CSV适合简单的数据分析，JSON适合web应用，Parquet适合大数据处理和分析。
+#而且这里的三种format用来生成不同的raw data，分别是patient data，ehr data和claims data。因为不同的raw data有不同的结构和用途，所以需要不同的format来存储和传输。
 
 # =========================
 # 7) Main execution block

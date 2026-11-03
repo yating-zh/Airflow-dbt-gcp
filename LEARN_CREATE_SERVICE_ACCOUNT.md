@@ -1,247 +1,136 @@
-# Create a GCP Service Account for This Project
+# 为本 Project 创建 GCP Service Account
 
-This note summarizes the setup needed for the script in `include/raw_data_generation/healthcare_data.py`.
+本文记录如何为 `include/raw_data_generation/healthcare_data.py` 配置 GCP access。
 
-## 1) Why you should not reuse someone else’s JSON key
+## 1. 不要复用别人的 JSON key
 
-Do not copy a service-account JSON from a tutorial or another repo.
+不要直接使用 tutorial 或其他 repository 中的 service account JSON。它绑定到原拥有者的 Google Cloud project、permissions、bucket 和账号。复用可能造成权限错误、访问错误 project、泄露安全风险或误访问他人数据。请使用自己的 GCP project 和 service account。
 
-That key is tied to:
+## 2. 创建 GCP project
 
-- another Google Cloud project
-- another set of permissions
-- another bucket or dataset
-- another account owner
+1. 打开 <https://console.cloud.google.com/>。
+2. 选择或创建 project。
+3. 为 project 命名，例如 `healthcare-demo-2026`。
+4. 记下 project ID。
 
-Using it can cause:
+## 3. 启用 APIs
 
-- permission errors
-- wrong project access
-- security risk
-- accidental access to someone else’s data
-
-Use your own GCP project and your own service account.
-
-## 2) Create your own Google Cloud project
-
-1. Go to: https://console.cloud.google.com/
-2. Select or create a project
-3. Give it a clear name, for example:
-   - `healthcare-demo-2026`
-4. Note the project ID
-
-## 3) Enable the required APIs
-
-For this project, enable at least:
+至少启用：
 
 - Cloud Storage API
 
-If you also want BigQuery later, enable:
+之后使用 BigQuery 时还要启用：
 
 - BigQuery API
 
-Steps:
+启用步骤：进入 `APIs & Services` → `Library`，搜索所需 API，然后点击 `Enable`。
 
-1. Open `APIs & Services` → `Library`
-2. Search for `Cloud Storage API`
-3. Click `Enable`
+## 4. 创建 service account
 
-## 4) Create a service account
+1. 进入 `IAM & Admin` → `Service Accounts`。
+2. 点击 `Create Service Account`。
+3. 设置名称，例如 `airflow-gcs-sa`。
+4. 点击 `Create and Continue`。
+5. 添加所需 roles，然后点击 `Done`。
 
-1. Go to: `IAM & Admin` → `Service Accounts`
-2. Click `Create Service Account`
-3. Name it something like:
-   - `airflow-gcs-sa`
-4. Click `Create and Continue`
-5. Add the necessary roles
-6. Click `Done`
+## 5. 授予 permissions
 
-## 5) Grant permissions
-
-For this script, the service account must be able to:
+当前 data generator 需要 service account 能够：
 
 - list buckets
-- create buckets
-- list objects in buckets
-- upload files to GCS
-- delete files in GCS
+- create 或检查 bucket
+- list bucket objects
+- 上传 objects 到 GCS
+- 删除 GCS objects
 
-The easiest role is:
+学习环境中较简单的选择是 `Storage Admin`。也可以组合使用更细粒度的 `Storage Object Admin` 和 `Storage Bucket Admin`。后续若要访问 BigQuery，还需授予对应 BigQuery permissions；优先选择满足任务需要的最小权限。
 
-- `Storage Admin`
+## 6. 创建 JSON key
 
-Alternative:
+1. 打开 service account。
+2. 进入 `Keys`。
+3. 点击 `Add Key` → `Create new key`。
+4. 选择 `JSON` 并下载文件。
 
-- `Storage Object Admin`
-- `Storage Bucket Admin`
+请将此文件当作 secret：不要 commit 到 Git、不要放进公开 repository，也不要在截图或聊天中分享。
 
-If you later add BigQuery, also add:
+## 7. 放置 JSON key
 
-- `BigQuery Admin` (or relevant narrower BigQuery roles)
+在 repository 中将文件放到：
 
-## 6) Create a JSON key
+```text
+include/gcp/service_account.json
+```
 
-1. Open the service account
-2. Go to `Keys`
-3. Click `Add Key` → `Create new key`
-4. Choose `JSON`
-5. Download the file
+运行在 Astro container 中时，同一个 project 文件会位于：
 
-Example filename:
+```text
+/usr/local/airflow/include/gcp/service_account.json
+```
 
-- `my-project-12345-abcdef.json`
+原 tutorial 使用了 container-only path；本机 Mac 应使用 project 内的文件路径。当前 generator 会检查 `GOOGLE_APPLICATION_CREDENTIALS`、container path 和相对脚本的候选路径。
 
-Important:
+## 8. 确认 `.gitignore`
 
-- Keep it secret
-- Never commit it to Git
-- Never share it in screenshots or chat
-- Never upload it to public repos
-
-## 7) Put the JSON in the correct project path
-
-This script expects the credential at:
-
-- `/usr/local/airflow/include/gcp/service_account.json`
-
-In the repo, use a local path equivalent:
-
-- `include/gcp/service_account.json`
-
-The project structure should look like:
-
-- `include/gcp/service_account.json`
-
-This is the same file the script resolves when running locally.
-
-## 8) Add it to `.gitignore`
-
-The repo already includes a rule similar to:
+repository 的 `.gitignore` 已包含类似规则：
 
 ```gitignore
 **/service_account.json
 ```
 
-This is important so the key is not committed.
+运行 `git status`，确认 JSON key 没有出现在待提交文件中。
 
-## 9) Fix the script path issue
+## 9. 创建并激活本机 Python virtual environment
 
-The original tutorial code used a container-only path:
-
-```python
-/usr/local/airflow/include/gcp/service_account.json
-```
-
-That path works only inside the Airflow/Astro container.
-
-For local Mac development, use a path that resolves relative to the project, for example:
-
-```python
-import os
-base_dir = os.path.dirname(os.path.abspath(__file__))
-keyfile_path = os.path.abspath(os.path.join(base_dir, "..", "gcp", "service_account.json"))
-```
-
-This makes the script work both locally and in the container.
-
-## 10) Check the Python environment
-
-Use a project virtual environment, not the system Python if you can avoid it.
-
-Example:
+在 project root 执行：
 
 ```bash
-cd /path/to/project
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-```
-
-Install the needed libraries:
-
-```bash
 python -m pip install google-cloud-storage pandas numpy faker pyarrow
 ```
 
-## 11) Validate the credentials manually
+## 10. 验证 credentials
 
-Test the JSON file and GCS auth:
+使用本机文件的实际路径测试 GCS authentication：
 
 ```bash
 python -c "from google.cloud import storage; c = storage.Client.from_service_account_json('/path/to/project/include/gcp/service_account.json'); print('Connected')"
 ```
 
-If that works, the key is valid and the service account is authenticated.
+打印 `Connected` 表示 credentials 可以用于 authentication；它不代表 service account 已获得所有 GCS permissions。
 
-## 12) Run the script
+## 11. 运行 data generator
 
-From the project root:
+从 project root 执行：
 
 ```bash
 ./.venv/bin/python include/raw_data_generation/healthcare_data.py
 ```
 
-That script will:
+脚本会检查或创建 bucket、清空 `dev/` 和 `prod/` prefixes、生成 synthetic healthcare data，再上传 CSV、JSON Lines 和 Parquet 文件。每次运行都会删除两个 prefixes 下的现有 objects，执行前先确认数据可以被替换。
 
-- create or check a GCS bucket
-- empty `dev/` and `prod/` folders
-- generate fake healthcare data
-- upload CSV, JSON, and Parquet files to GCS
+## 12. 排查常见错误
 
-## 13) Why the script failed before
+### 凭证文件找不到
 
-The most common reasons were:
+检查文件是否在 `include/gcp/service_account.json`。`/usr/local/airflow/...` 是 Astro container path，本机 Mac 不一定存在。
 
-- the JSON file was missing
-- the path was wrong
-- the service account had no GCS permissions
-- the bucket name was invalid or inaccessible
-- the script was trying to access a bucket without `storage.buckets.get` and `storage.objects.list` permissions
+### GCS 返回 `403 Forbidden`
 
-The key error was:
+如果报错包含 `storage.buckets.get` 或 `storage.objects.list`，表示 authentication 识别了 service account，但 IAM 没有授权它访问目标 bucket。确认 `BUCKET_NAME` 是自己的 bucket，并检查该 service account 在 project 或 bucket 上的 Storage roles。
 
-```text
-403 Forbidden
-storage.buckets.get access denied
-storage.objects.list access denied
-```
+### 使用了 tutorial 作者的 bucket
 
-This means:
+教程中的 bucket 属于其他 project。把脚本中的 `BUCKET_NAME` 改为你自己的 bucket，并确认 bucket 名称全局唯一。
 
-- the credentials are recognized
-- but the service account is not authorized to use that bucket
+## 最后检查清单
 
-## 14) Fix the permissions
-
-In the GCP Console:
-
-1. Go to `IAM & Admin` → `IAM`
-2. Find your service account
-3. Add the role `Storage Admin` (simplest)
-4. Wait a moment for IAM propagation
-5. Re-run the script
-
-## 15) Best practice
-
-For a learning project:
-
-- create a dedicated project
-- create a dedicated service account
-- provide only the necessary roles
-- keep the JSON outside Git
-- protect the key as a secret
-- use environment variables or relative paths when possible
-
-## 16) Final takeaway
-
-To use this repo safely:
-
-1. create your own GCP project
-2. create your own service account
-3. generate your own JSON key
-4. grant Storage permissions
-5. place the file in `include/gcp/service_account.json`
-6. keep it out of Git
-7. run the script in a local venv or Astro/Airflow environment
-
-This is the correct setup pattern for this project.
+1. 使用自己的 GCP project。
+2. 使用自己的 service account 和 JSON key。
+3. 把 key 放在 `include/gcp/service_account.json`。
+4. 确认 key 被 `.gitignore` 忽略。
+5. 为 service account 授予必要的 Storage permissions。
+6. 在本机 virtual environment 中安装 dependencies。
+7. 确认 bucket 名称后再运行 generator。

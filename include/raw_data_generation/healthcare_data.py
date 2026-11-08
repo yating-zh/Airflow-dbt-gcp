@@ -23,7 +23,7 @@ from google.cloud import storage
 # This file is expected to contain the GCP service account JSON key.
 # We check a few common locations so the script works both in a local dev environment
 # and inside the Airflow/Astro container, where the path is usually /usr/local/airflow/...
-# keyfile_path = "C:/Users/User/Desktop/Projects/healthcare-data-project-442109-f33db94a36a9.json"
+# keyfile_path = "/path/to/your/service-account.json"
 base_dir = os.path.dirname(os.path.abspath(__file__))
 possible_paths = [
     os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"),

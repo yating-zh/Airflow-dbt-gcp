@@ -2,6 +2,10 @@
 FROM quay.io/astronomer/astro-runtime:12.7.1 
 #这行指定了基础的image，这个image已经包含了Airflow和一些常用的dependencies。我们在这个基础上安装dbt和其他需要的Python包。
 
+# requirements 安装
+COPY requirements.txt /usr/local/airflow/requirements.txt
+RUN pip install --no-cache-dir -r /usr/local/airflow/requirements.txt
+
 # Set environment variables
 ENV VENV_PATH="/usr/local/airflow/dbt_venv" 
 # 指定了虚拟环境的安装位置。我们将dbt和其他Python包安装在这个虚拟环境中，以避免与系统Python环境冲突。
